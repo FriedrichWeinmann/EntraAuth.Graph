@@ -280,7 +280,7 @@
 		if ($Request) { $batchRequests = ConvertTo-BatchRequest -Request $Request -Method $Method -Body $Body -Header $Header -Cmdlet $PSCmdlet }
 		else {
 			$batchRequests = foreach ($pathEntry in $Path) {
-				ConvertFrom-PathRequest -Path $pathEntry -ArgumentList $ArgumentList -Properties $Properties -Method $Method -Body $Body -Header $Header -Cmdlet $PSCmdlet
+				ConvertFrom-PathRequest -Path $pathEntry -ArgumentList $ArgumentList -Properties $Properties -Method $Method -Body $Body -Header $Header
 			}
 		}
 
