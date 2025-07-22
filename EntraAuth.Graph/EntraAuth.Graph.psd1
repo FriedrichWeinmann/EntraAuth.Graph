@@ -16,7 +16,7 @@ GUID = '944f9085-6aa1-4868-9e00-5c4b1784e1c0'
 Author = 'Friedrich'
 
 # Company or vendor of this module
-CompanyName = 'MyCompany'
+CompanyName = ' '
 
 # Copyright statement for this module
 Copyright = '(c) Friedrich. All rights reserved.'
@@ -44,7 +44,7 @@ Description = 'Graph API client module based on EntraAuth'
 
 # Modules that must be imported into the global environment prior to importing this module
 RequiredModules = @(
-	@{ ModuleName = 'EntraAuth'; ModuleVersion = '1.8.46' }
+	@{ ModuleName = 'EntraAuth'; ModuleVersion = '1.8.50' }
 )
 
 # Assemblies that must be loaded prior to importing this module
@@ -64,7 +64,8 @@ RequiredModules = @(
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
 FunctionsToExport = @(
-
+	'Invoke-EagBatchRequest'
+	'Set-EagConnection'
 )
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
