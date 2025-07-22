@@ -39,7 +39,12 @@ $publishDir = New-Item -Path $WorkingDirectory -Name publish -ItemType Directory
 Copy-Item -Path "$($WorkingDirectory)\EntraAuth.Graph" -Destination $publishDir.FullName -Recurse -Force
 
 #region Gather text data to compile
-$text = @()
+$text = @('$script:ModuleRoot = $PSScriptRoot')
+
+# Gather Classes
+Get-ChildItem -Path "$($publishDir.FullName)\EntraAuth.Graph\internal\classes\" -Recurse -File -Filter "*.ps1" | ForEach-Object {
+	$text += [System.IO.File]::ReadAllText($_.FullName)
+}
 
 # Gather commands
 Get-ChildItem -Path "$($publishDir.FullName)\EntraAuth.Graph\internal\functions\" -Recurse -File -Filter "*.ps1" | ForEach-Object {
