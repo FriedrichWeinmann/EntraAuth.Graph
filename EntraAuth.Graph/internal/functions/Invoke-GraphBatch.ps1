@@ -26,6 +26,10 @@
 	
 	.PARAMETER Timeout
 		How long as a maximum we are willing to wait before giving up retries on throttled requests.
+
+	.PARAMETER IncludeFailed
+		Also include the result objects for failed results.
+		This is processed AFTER the error handling, so ErrorAction Stop will prevent it.
 	
 	.PARAMETER Cmdlet
 		The $PSCmdlet variable of the calling command, to make sure all errors happen within the context of the caller
@@ -54,6 +58,9 @@
 		[Parameter(Mandatory = $true)]
 		[TimeSpan]
 		$Timeout,
+
+		[switch]
+		$IncludeFailed,
 
 		[Parameter(Mandatory = $true)]
 		$Cmdlet
@@ -88,6 +95,7 @@
 					($Batch | Where-Object { $_.ID -eq $failedRequest.id })
 				)
 			)
+			if ($IncludeFailed) { $failedRequest }
 		}
 		#endregion Handle Failed Requests
 
@@ -115,6 +123,7 @@
 					$throttledOrigin
 				)
 			)
+			if ($IncludeFailed) { $throttledRequests }
 			return
 		}
 
@@ -122,7 +131,7 @@
 		$Cmdlet.WriteVerbose("Throttled requests detected, waiting $interval seconds before retrying")
 		Start-Sleep -Seconds $interval
 
-		Invoke-GraphBatch -ServiceMap $ServiceMap -Batch $throttledOrigin -Start $Start -Timeout $Timeout -Cmdlet $Cmdlet
+		Invoke-GraphBatch -ServiceMap $ServiceMap -Batch $throttledOrigin -Start $Start -Timeout $Timeout -IncludeFailed:$IncludeFailed -Cmdlet $Cmdlet
 		#endregion Handle Throttled Requests
 	}
 }
