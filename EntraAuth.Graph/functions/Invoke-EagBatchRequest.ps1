@@ -2,7 +2,7 @@
 	<#
 	.SYNOPSIS
 		Executes a graph Batch requests, sending multiple requests in a single invocation.
-		
+
 	.DESCRIPTION
 		Executes a graph Batch requests, sending multiple requests in a single invocation.
 		This allows optimizing code performance, where iteratively sending requests does not scale.
@@ -15,7 +15,7 @@
 
 		Up to 20 requests can be sent in one batch, but this command will automatically split larger workloads into separate
 		sets of 20 before sending them.
-	
+
 	.PARAMETER Request
 		The requests to send. Provide either a url string or a request hashtables with any combination of the following keys:
 		+ id:        The numeric ID to use. Determines the order in which requests are processed in the server end.
@@ -32,7 +32,7 @@
 
 		For more documentation on the properties, see the online documentation on batch requests:
 		https://learn.microsoft.com/en-us/graph/json-batching
-	
+
 	.PARAMETER Path
 		The path(s) to execute for each item in ArgumentList against.
 		Example: "users/{0}/authentication/methods"
@@ -44,44 +44,44 @@
 		Assuming the parameter "-Properties" contains "'SiteID', 'ListID'" and the ArgumentList provides objects that contain those properties, this allows bulkrequesting all items from many lists in one batch.
 
 		All requests generated from this parameter use the default Method, Body & Header provided via the parameters of the same name.
-	
+
 	.PARAMETER ArgumentList
 		The list of values, for each of which for each "-Path" provided a request is sent.
 		In combination with the "-Properties" parameter, you can also select one or more properties from these objects to format into the path,
 		rather than inserting the full value of the argument.
-	
+
 	.PARAMETER Properties
 		The properties from the arguments provided via "-ArgumentList" to format into the paths provided.
 		This allows inserting multiple values into the request url.
-	
+
 	.PARAMETER Method
 		The default method to use for batched requests, if not defined otherwise in the request.
 		Defaults to "GET"
-	
+
 	.PARAMETER Body
 		The default body to provide with batched requests, if not defined otherwise in the request.
 		Defaults to not being specified at all.
-		
+
 	.PARAMETER Header
 		The default header to provide with batched requests, if not defined otherwise in the request.
 		Defaults to not being specified at all.
-	
+
 	.PARAMETER Timeout
 		How long to retry batched requests that are being throttled.
 		By default, requests are re-attempted until 5 minutes have expired (specifically, until the "notAfter" response would lead the next attempt beyond that time limit).
 		Set to 0 minutes to never retry throttled requests.
-	
+
 	.PARAMETER Raw
 		Do not process the responses provided by the batched requests.
 		This will cause the batching metadata to be included with the actual result data.
 		This can be useful to correlate responses to the original requests.
-	
+
 	.PARAMETER ServiceMap
 		Optional hashtable to map service names to specific EntraAuth service instances.
 		Used for advanced scenarios where you want to use something other than the default Graph connection.
 		Example: @{ Graph = 'GraphBeta' }
 		This will switch all Graph API calls to use the beta Graph API.
-	
+
 	.EXAMPLE
 		PS C:\> Invoke-EagBatchRequest -Path 'users/{0}/authentication/methods' -ArgumentList $users.id
 
@@ -99,11 +99,70 @@
 		Assumes that each object in $lists has the properties "SiteID" and "ListID" (not case sensitive).
 
 	.EXAMPLE
+		PS C:\> $requests = @(
+		@{
+			url    = "users"
+			method = "GET"
+		},
+		@{
+			url     = "users?`$filter=country eq 'Denmark' and accountEnabled eq true and startswith(jobTitle, 'TECH') and onPremisesSyncEnabled eq true&`$select=id,displayName,userPrincipalName&`$expand=memberOf&`$count=true"
+			method  = "GET"
+			headers = @{
+				"ConsistencyLevel" = "eventual"
+				"Content-Type"     = "application/json"
+			}
+		},
+		@{
+			url     = "users"
+			method  = "PATCH"
+			body    = @{
+				businessPhones = @(
+					"+1 425 555 0109"
+				)
+				officeLocation = "18/2111"
+			}
+			headers = @{ "Content-Type" = "application/json" }
+		},
+		@{
+			url    = "users/{user-id}"
+			method = "DELETE"
+		},
+		@{
+			url    = "groups"
+			method = "POST"
+			body   = @{
+				description     = "Self help community for library"
+				displayName     = "Library Assist"
+				groupTypes      = @(
+					"Unified"
+				)
+				mailEnabled     = $true
+				mailNickname    = "library"
+				securityEnabled = $false
+			}
+		},
+		@{
+			url     = "users/{user-id}/manager/´$ref"
+			method  = "PUT"
+			body    = @{
+				"@odata.id" = "https://graph.microsoft.com/v1.0/users/{manager-id}"
+			}
+			headers = @{
+				"Content-Type" = "application/json"
+			}
+		}
+)
 		PS C:\> Invoke-EagBatchRequest -Request $requests -Method GET -Header @{ 'Content-Type' = 'application/json' }
 
 		Executes all the requests provided in $requests, defaulting to the method "GET" and providing the content-type via header,
 		unless otherwise specified in individual requests.
-	
+	.EXAMPLE
+		PS C:\> $requests = @(
+			@{ url = 'users/12345'; method = 'GET' },
+			@{ url = 'users/67890'; method = 'GET' }
+		)
+		PS C:\> Invoke-EagBatchRequest -Request $requests -Method GET -Raw
+
 	.LINK
 		https://learn.microsoft.com/en-us/graph/json-batching
 	#>
@@ -116,11 +175,11 @@
 		[Parameter(Mandatory = $true, ParameterSetName = 'Path')]
 		[string[]]
 		$Path,
-		
+
 		[Parameter(Mandatory = $true, ParameterSetName = 'Path')]
 		[object[]]
 		$ArgumentList,
-		
+
 		[Parameter(ParameterSetName = 'Path')]
 		[Alias('Property')]
 		[string[]]
@@ -157,10 +216,10 @@
 			param (
 				[string]
 				$Path,
-		
+
 				[object[]]
 				$ArgumentList,
-				
+
 				[AllowEmptyCollection()]
 				[string[]]
 				$Properties,
@@ -196,7 +255,6 @@
 				$index++
 			}
 		}
-
 		function ConvertTo-BatchRequest {
 			[CmdletBinding()]
 			param (
@@ -211,7 +269,7 @@
 				[AllowNull()]
 				[hashtable]
 				$Body,
-		
+
 				[AllowNull()]
 				[hashtable]
 				$Header
