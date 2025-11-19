@@ -84,6 +84,10 @@
 		This will cause the batching metadata to be included with the actual result data.
 		This can be useful to correlate responses to the original requests.
 
+	.PARAMETER NoPaging
+		Disables paging for each individual request.
+		If not specified, all batches that has more data will automatically page through all pages, until there is no more data.
+
 	.PARAMETER ServiceMap
 		Optional hashtable to map service names to specific EntraAuth service instances.
 		Used for advanced scenarios where you want to use something other than the default Graph connection.
@@ -176,6 +180,7 @@
 
 		Executes all the requests provided in $requests, defaulting to the method "GET" and providing the content-type via header,
 		unless otherwise specified in individual requests.
+
 	.EXAMPLE
 		PS C:\> $requests = @(
 			@{ url = 'users/12345'; method = 'GET' },
@@ -183,10 +188,13 @@
 		)
 		PS C:\> Invoke-EagBatchRequest -Request $requests -Method GET -Raw
 
+		Executes both requests in one batch, returning the raw response as provided.
+
 	.LINK
 		https://learn.microsoft.com/en-us/graph/json-batching
 	#>
-	[CmdletBinding(DefaultParameterSetName = 'Request')]
+
+	[CmdletBinding()]
 	param (
 		[Parameter(Mandatory = $true, ParameterSetName = 'Request')]
 		[object[]]
@@ -223,6 +231,9 @@
 		[switch]
 		$Raw,
 
+		[switch]
+		$NoPaging,
+
 		[ArgumentCompleter({ (Get-EntraService | Where-Object Resource -Match 'graph\.microsoft\.com').Name })]
 		[ServiceTransformAttribute()]
 		[hashtable]
@@ -232,202 +243,79 @@
 		$services = $script:_serviceSelector.GetServiceMap($ServiceMap)
 		Assert-EntraConnection -Cmdlet $PSCmdlet -Service $services.Graph
 
-		$batchSize = 20 # Currently hardcoded API limit
-		$includeFailed = $Raw -or $Matched
-
-		function ConvertFrom-PathRequest {
+		#region Utility Functions
+		function Get-NextBatch {
 			[CmdletBinding()]
 			param (
-				[string]
-				$Path,
+				$Tasks,
 
-				[object[]]
-				$ArgumentList,
-
-				[AllowEmptyCollection()]
-				[string[]]
-				$Properties,
-
-				[Microsoft.PowerShell.Commands.WebRequestMethod]
-				$Method = 'Get',
-
-				[hashtable]
-				$Body,
-
-				[hashtable]
-				$Header,
-
-				[hashtable]
-				$Tracking
+				$Cmdlet
 			)
 
-			$index = 1
-			foreach ($item in $ArgumentList) {
-				# For later matching of result vs input
-				$Tracking["$index"] = $item
+			$count = 0
+			$now = Get-Date
+			foreach ($task in $Tasks) {
+				if ($task.WaitUntil -and $task.WaitUntil -gt $now) { continue } # Not ready yet
+				if ($task.WaitUntil -and $task.WaitLimit -lt $now) { continue } # We waited too long already
+				if ($task.WaitUntil -and $task.WaitLimit -lt $task.WaitUntil) { continue } # Waiting will take longer than we are willing to wait
 
-				if (-not $Properties) { $values = $item }
-				else {
-					$values = foreach ($property in $Properties) {
-						$item.$property
-					}
-				}
+				$task
+				$count++
 
-				$request = @{
-					id     = "$index"
-					method = "$Method".ToUpper()
-					url    = $Path -f $values
-				}
-				if ($Body) { $request.body = $Body }
-				if ($Header) { $request.headers = $Header }
-				$request
+				if ($count -gt 18) { break }
+			}
 
-				$index++
+			# Cleanup Throttling Limits
+			foreach ($task in $Tasks.ToArray()) {
+				if (-not $task.WaitUntil) { continue }
+				if ($task.WaitLimit -gt $now -and $task.WaitUntil -lt $task.WaitLimit) { continue }
+
+				$null = $Tasks.Remove($task)
+				$Cmdlet.WriteError(
+					[System.Management.Automation.ErrorRecord]::new(
+						[Exception]::new("Retries for throttling exceeded, giving up on: $($task.id)"),
+						"ThrottlingRetriesExhausted",
+						[System.Management.Automation.ErrorCategory]::LimitsExceeded,
+						$task
+					)
+				)
 			}
 		}
-		function ConvertTo-BatchRequest {
-			[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSReviewUnusedParameter", "")]
-			[CmdletBinding()]
-			param (
-				[object[]]
-				$Request,
-
-				[Microsoft.PowerShell.Commands.WebRequestMethod]
-				$Method,
-
-				$Cmdlet,
-
-				[AllowNull()]
-				[hashtable]
-				$Body,
-
-				[AllowNull()]
-				[hashtable]
-				$Header,
-
-				[hashtable]
-				$Tracking
-			)
-			$defaultMethod = "$Method".ToUpper()
-
-			$results = @{}
-			$requests = foreach ($entry in $Request) {
-				$newRequest = @{
-					url    = ''
-					method = $defaultMethod
-					id     = 0
-				}
-				if ($Body) { $newRequest.body = $Body }
-				if ($Header) { $newRequest.headers = $Header }
-				if ($entry -is [string]) {
-					$newRequest.url = $entry
-					$newRequest
-					continue
-				}
-
-				if (-not $entry.url) {
-					Invoke-TerminatingException -Cmdlet $Cmdlet -Message "Invalid batch request: No Url found! $entry" -Category InvalidArgument
-				}
-				$newRequest.url = $entry.url
-				if ($entry.Method) {
-					$newRequest.method = "$($entry.Method)".ToUpper()
-				}
-				if ($entry.id -as [int]) {
-					$newRequest.id = $entry.id -as [int]
-					$results[($entry.id -as [int])] = $newRequest
-				}
-				if ($entry.body) {
-					$newRequest.body = $entry.body
-				}
-				if ($entry.headers) {
-					$newRequest.headers = $entry.headers
-				}
-				if ($entry.dependsOn) {
-					$newRequest.dependsOn
-				}
-				$newRequest
-			}
-
-			$index = 1
-			$finalList = foreach ($requestItem in $requests) {
-				if ($requestItem.id) {
-					$requestItem.id = $requestItem.id -as [string]
-					$requestItem
-					continue
-				}
-				$requestItem.id = $requestItem.id -as [string]
-
-				while ($results[$index]) {
-					$index++
-				}
-				$requestItem.id = $index
-				$results[$index] = $requestItem
-				$requestItem
-			}
-			
-			# For later matching of result vs input
-			@($finalList).ForEach{ $Tracking[$_.id] = $Tracking }
-
-			$finalList | Sort-Object { $_.id -as [int] }
+		#endregion Utility Functions
+		
+		$allTasks = [System.Collections.Generic.List[object]]::new()
+		$idTracking = @{ CurrentID = 1 }
+		$parameters = @{}
+		foreach ($key in $PSBoundParameters.Keys) {
+			$parameters[$key] = $PSBoundParameters.$Key
 		}
-		function ConvertTo-BatchResult {
-			[CmdletBinding()]
-			param (
-				$BatchEntry,
+		$parameters.Method = $Method
+		$parameters.Timeout = $Timeout
 
-				[hashtable]
-				$Tracking,
-
-				[switch]
-				$Raw
-			)
-
-			if ($Raw) { $result = $BatchEntry }
-			elseif ($BatchEntry.Body.Value) { $result = $BatchEntry.Body.Value }
-			else { $result = $BatchEntry.Body }
-
-			[PSCustomObject]@{
-				PSTypeName = 'EntraAuth.Graph.BatchResult'
-				Id         = "$($BatchEntry.id)"
-				Argument   = $Tracking["$($BatchEntry.id)"]
-				Success    = $BatchEntry.status -match '^2'
-				Result     = $result
+		foreach ($requestItem in $Request) {
+			ConvertTo-BatchRequest -Request $requestItem -Parameters $parameters -TaskList $allTasks -Tracking $idTracking
+		}
+		foreach ($pathItem in $Path) {
+			foreach ($argumentItem in $ArgumentList) {
+				ConvertFrom-PathRequest -Path $pathItem -Argument $argumentItem -Parameters $parameters -TaskList $allTasks -Tracking $idTracking
 			}
-
-			$null = $Tracking.Remove("$($BatchEntry.id)")
 		}
 	}
 	process {
-		$tracking = @{ }
-		if ($Request) { $batchRequests = ConvertTo-BatchRequest -Request $Request -Method $Method -Body $Body -Header $Header -Tracking $tracking -Cmdlet $PSCmdlet }
-		else {
-			$batchRequests = foreach ($pathEntry in $Path) {
-				ConvertFrom-PathRequest -Path $pathEntry -ArgumentList $ArgumentList -Properties $Properties -Method $Method -Body $Body -Header $Header -Tracking $tracking
+		do {
+			$tasks = Get-NextBatch -Tasks $allTasks -Cmdlet $PSCmdlet
+			
+			# Case: All remaining tasks have expired
+			if ($allTasks.Count -lt 1) { return }
+
+			# Case: The only remaining tasks are throttled and wait to continue
+			if (-not $tasks) {
+				Start-Sleep -Seconds 1
+				continue
 			}
+
+			Invoke-GraphBatch -Tasks $tasks -TaskList $allTasks -ServiceMap $services -Cmdlet $PSCmdlet
 		}
-
-		$counter = [pscustomobject] @{ Value = 0 }
-		$batches = $batchRequests | Group-Object -Property { [math]::Floor($counter.Value++ / $batchSize) } -AsHashTable
-
-		foreach ($batch in ($batches.GetEnumerator() | Sort-Object -Property Key)) {
-			Invoke-GraphBatch -ServiceMap $services -Batch $batch.Value -Start (Get-Date) -Timeout $Timeout -IncludeFailed:$includeFailed -Cmdlet $PSCmdlet | ForEach-Object {
-				if ($Matched) { ConvertTo-BatchResult -BatchEntry $_ -Tracking $tracking -Raw:$Raw }
-				elseif ($Raw) { $_ }
-				elseif ($_.Body.Value) { $_.Body.Value }
-				else { $_.Body }
-			}
-		}
-
-		if (-not $Matched) { return }
-
-		foreach ($pair in $tracking.GetEnumerator()) {
-			[PSCustomObject]@{
-				PSTypeName = 'EntraAuth.Graph.BatchResult'
-				Id         = $pair.Key
-				Argument   = $pair.Value
-				Success    = $false
-				Result     = $null
-			}
-		}
+		while ($allTasks.Count -gt 0)
 	}
 }
