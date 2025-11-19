@@ -1,6 +1,5 @@
 ﻿function Invoke-EagBatchRequest {
 	<#
-		<#
 	.SYNOPSIS
 		Executes a graph Batch requests, sending multiple requests in a single invocation.
 
@@ -194,6 +193,7 @@
 	.LINK
 		https://learn.microsoft.com/en-us/graph/json-batching
 	#>
+
 	[CmdletBinding()]
 	param (
 		[Parameter(Mandatory = $true, ParameterSetName = 'Request')]
