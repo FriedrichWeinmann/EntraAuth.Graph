@@ -1,5 +1,9 @@
 ﻿# Changelog
 
+## 1.0.4 (2025-11-19)
+
++ Fix: Fails to execute batch requests
+
 ## 1.0.3 (2025-11-19)
 
 + Upd: Added support for paging individual batch results

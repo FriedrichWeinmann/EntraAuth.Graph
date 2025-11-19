@@ -36,6 +36,7 @@
 		$Parameters,
 
 		[Parameter(Mandatory = $true)]
+		[AllowEmptyCollection()]
 		[System.Collections.Generic.List[object]]
 		$TaskList,
 
