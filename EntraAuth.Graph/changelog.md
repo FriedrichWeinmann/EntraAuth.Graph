@@ -1,5 +1,9 @@
 ﻿# Changelog
 
+## 1.0.5 (2026-05-05)
+
++ Fix: Incorrect argument property on failed requests.
+
 ## 1.0.4 (2025-11-19)
 
 + Fix: Fails to execute batch requests

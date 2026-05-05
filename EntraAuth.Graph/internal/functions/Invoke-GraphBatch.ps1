@@ -75,7 +75,7 @@
 			if (200 -le $result.status -and 299 -ge $result.status) {
 				# Update for paging or complete task
 				if ($result.body.'@odata.nextLink' -and -not $task.Parameters.NoBatching) {
-					$task.Batch.url = ($result.body.'@odata.nextLink' -replace '^https://' -split '/',3)[-1]
+					$task.Batch.url = ($result.body.'@odata.nextLink' -replace '^https://' -split '/', 3)[-1]
 				}
 				else { $null = $TaskList.Remove($task) }
 
@@ -102,6 +102,7 @@
 						Success    = $true
 						Result     = $task.Result
 						Status     = $result.status
+						Batch      = $task.Batch
 					}
 					continue
 				}
@@ -133,7 +134,7 @@
 						[Exception]::new("Error in batch request $($result.id): $($result.body.error.message)"),
 						('{0}|{1}' -f $result.status, $result.error.code),
 						[System.Management.Automation.ErrorCategory]::NotSpecified,
-						$task.Batch
+						$task
 					)
 				)
 
@@ -141,10 +142,11 @@
 					[PSCustomObject]@{
 						PSTypeName = 'EntraAuth.Graph.BatchResult'
 						Id         = "$($task.Id)"
-						Argument   = $task.Batch
+						Argument   = $task.Argument
 						Success    = $false
 						Result     = $result.error
 						Status     = $result.status
+						Batch      = $task.Batch
 					}
 				}
 				continue
@@ -162,10 +164,11 @@
 				[PSCustomObject]@{
 					PSTypeName = 'EntraAuth.Graph.BatchResult'
 					Id         = "$($task.Id)"
-					Argument   = $task.Batch
+					Argument   = $task.Argument
 					Success    = $false
 					Result     = $result
 					Status     = $result.status
+					Batch      = $task.Batch
 				}
 				continue
 			}
