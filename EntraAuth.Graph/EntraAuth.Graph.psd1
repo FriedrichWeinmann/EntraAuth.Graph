@@ -4,7 +4,7 @@
 RootModule = 'EntraAuth.Graph.psm1'
 
 # Version number of this module.
-ModuleVersion = '1.0.4'
+ModuleVersion = '1.0.5'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -44,7 +44,7 @@ Description = 'Graph API client module based on EntraAuth'
 
 # Modules that must be imported into the global environment prior to importing this module
 RequiredModules = @(
-	@{ ModuleName = 'EntraAuth'; ModuleVersion = '1.8.50' }
+	@{ ModuleName = 'EntraAuth'; ModuleVersion = '1.8.52' }
 )
 
 # Assemblies that must be loaded prior to importing this module
@@ -92,19 +92,19 @@ PrivateData = @{
     PSData = @{
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        # Tags = @()
+        Tags = @('EntraAuth','Entra','Graph')
 
         # A URL to the license for this module.
-        # LicenseUri = ''
+        LicenseUri = 'https://github.com/FriedrichWeinmann/EntraAuth.Graph/blob/master/LICENSE'
 
         # A URL to the main website for this project.
-        # ProjectUri = ''
+        ProjectUri = 'https://github.com/FriedrichWeinmann/EntraAuth.Graph'
 
         # A URL to an icon representing this module.
         # IconUri = ''
 
         # ReleaseNotes of this module
-        # ReleaseNotes = ''
+        ReleaseNotes = 'https://github.com/FriedrichWeinmann/EntraAuth.Graph/blob/master/EntraAuth.Graph/changelog.md'
 
         # Prerelease string of this module
         # Prerelease = ''
